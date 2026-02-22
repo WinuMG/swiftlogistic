@@ -1,0 +1,46 @@
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+.env
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.pid
+docker-compose.override.yml
+
+# Build
+/dist
+/build
+
+# VS Code
+.vscode/
+
+# MongoDB/Redis/RabbitMQ data
+mongodb_data/
+redis_data/
+rabbitmq_data/
+
+# Misc
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# React
+client-portal/build/
+client-portal/node_modules/
+
+# Coverage
+coverage/
+
+# Others
+*.tgz
+

@@ -1,0 +1,60 @@
+{
+  "name": "swiftlogistics",
+  "version": "1.0.0",
+  "description": "Middleware Architecture for SwiftLogistics - A comprehensive logistics platform",
+  "main": "index.js",
+  "scripts": {
+    "start": "docker-compose up -d",
+    "stop": "docker-compose down",
+    "dev": "concurrently \"npm run dev:gateway\" \"npm run dev:client-service\" \"npm run dev:order-service\" \"npm run dev:route-service\" \"npm run dev:warehouse-service\" \"npm run dev:notification-service\"",
+    "dev:gateway": "cd services/api-gateway && npm run dev",
+    "dev:client-service": "cd services/client-service && npm run dev",
+    "dev:order-service": "cd services/order-service && npm run dev",
+    "dev:route-service": "cd services/route-service && npm run dev",
+    "dev:warehouse-service": "cd services/warehouse-service && npm run dev",
+    "dev:notification-service": "cd services/notification-service && npm run dev",
+    "build": "npm run build:gateway && npm run build:client-service && npm run build:order-service && npm run build:route-service && npm run build:warehouse-service && npm run build:notification-service",
+    "build:gateway": "cd services/api-gateway && npm run build",
+    "build:client-service": "cd services/client-service && npm run build",
+    "build:order-service": "cd services/order-service && npm run build",
+    "build:route-service": "cd services/route-service && npm run build",
+    "build:warehouse-service": "cd services/warehouse-service && npm run build",
+    "build:notification-service": "cd services/notification-service && npm run build",
+    "test": "jest tests/ --verbose --forceExit --detectOpenHandles",
+    "test:unit": "jest tests/swiftlogistics.test.js --verbose --forceExit",
+    "test:gateway": "cd services/api-gateway && npm test",
+    "test:client-service": "cd services/client-service && npm test",
+    "test:order-service": "cd services/order-service && npm test",
+    "test:route-service": "cd services/route-service && npm test",
+    "test:warehouse-service": "cd services/warehouse-service && npm test",
+    "test:notification-service": "cd services/notification-service && npm test",
+    "install:all": "npm install && cd services/api-gateway && npm install && cd ../client-service && npm install && cd ../order-service && npm install && cd ../route-service && npm install && cd ../warehouse-service && npm install && cd ../notification-service && npm install && cd ../../client-portal && npm install"
+  },
+  "keywords": [
+    "middleware",
+    "microservices",
+    "logistics",
+    "nodejs",
+    "express",
+    "docker",
+    "mongodb",
+    "redis",
+    "rabbitmq"
+  ],
+  "author": "SwiftLogistics Team",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "jest": "^30.2.0",
+    "supertest": "^7.2.2"
+  },
+  "dependencies": {
+    "ajv": "^6.12.6",
+    "ajv-keywords": "^3.5.2",
+    "amqplib": "^0.10.9",
+    "axios": "^1.13.5",
+    "ioredis": "^5.9.3",
+    "joi": "^18.0.2",
+    "mongoose": "^9.2.1"
+  }
+}

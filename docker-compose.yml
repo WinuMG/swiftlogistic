@@ -1,0 +1,217 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: swiftlogistics-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: swiftlogistics123
+      MONGO_INITDB_DATABASE: swiftlogistics
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - swiftlogistics-network
+
+  # Redis Cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: swiftlogistics-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - swiftlogistics-network
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: swiftlogistics-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: swiftlogistics123
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - swiftlogistics-network
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ./services/api-gateway/Dockerfile
+    container_name: swiftlogistics-api-gateway
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
+      JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
+      CLIENT_URL: http://localhost:8081
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+    networks:
+      - swiftlogistics-network
+
+  # Client Management Service
+  client-service:
+    build:
+      context: .
+      dockerfile: ./services/client-service/Dockerfile
+    container_name: swiftlogistics-client-service
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
+      JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
+      CLIENT_URL: http://localhost:8081
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+    networks:
+      - swiftlogistics-network
+
+  # Order Management Service
+  order-service:
+    build:
+      context: .
+      dockerfile: ./services/order-service/Dockerfile
+    container_name: swiftlogistics-order-service
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
+      JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
+      CLIENT_URL: http://localhost:8081
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+    networks:
+      - swiftlogistics-network
+
+  # Route Optimization Service
+  route-service:
+    build:
+      context: .
+      dockerfile: ./services/route-service/Dockerfile
+    container_name: swiftlogistics-route-service
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      NODE_ENV: production
+      PORT: 3003
+      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
+      JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
+      CLIENT_URL: http://localhost:8081
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+    networks:
+      - swiftlogistics-network
+
+  # Warehouse Management Service
+  warehouse-service:
+    build:
+      context: .
+      dockerfile: ./services/warehouse-service/Dockerfile
+    container_name: swiftlogistics-warehouse-service
+    restart: unless-stopped
+    ports:
+      - "3004:3004"
+    environment:
+      NODE_ENV: production
+      PORT: 3004
+      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
+      JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
+      CLIENT_URL: http://localhost:8081
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+    networks:
+      - swiftlogistics-network
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./services/notification-service/Dockerfile
+    container_name: swiftlogistics-notification-service
+    restart: unless-stopped
+    ports:
+      - "3005:3005"
+    environment:
+      NODE_ENV: production
+      PORT: 3005
+      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
+      JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
+      CLIENT_URL: http://localhost:8081
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+    networks:
+      - swiftlogistics-network
+
+  # Client Portal (React App)
+  client-portal:
+    build:
+      context: ./client-portal
+      dockerfile: Dockerfile
+    container_name: swiftlogistics-client-portal
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    environment:
+      REACT_APP_API_URL: http://localhost:3000
+    depends_on:
+      - api-gateway
+    networks:
+      - swiftlogistics-network
+
+volumes:
+  mongodb_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  swiftlogistics-network:
+    driver: bridge

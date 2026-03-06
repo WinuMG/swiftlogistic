@@ -43,6 +43,9 @@ services:
       dockerfile: ./services/api-gateway/Dockerfile
     container_name: swiftlogistics-api-gateway
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "3000:3000"
     environment:
@@ -71,6 +74,9 @@ services:
       dockerfile: ./services/client-service/Dockerfile
     container_name: swiftlogistics-client-service
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "3001:3001"
     environment:
@@ -99,6 +105,9 @@ services:
       dockerfile: ./services/order-service/Dockerfile
     container_name: swiftlogistics-order-service
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "3002:3002"
     environment:
@@ -127,6 +136,9 @@ services:
       dockerfile: ./services/route-service/Dockerfile
     container_name: swiftlogistics-route-service
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "3003:3003"
     environment:
@@ -155,6 +167,9 @@ services:
       dockerfile: ./services/warehouse-service/Dockerfile
     container_name: swiftlogistics-warehouse-service
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "3004:3004"
     environment:
@@ -183,6 +198,9 @@ services:
       dockerfile: ./services/notification-service/Dockerfile
     container_name: swiftlogistics-notification-service
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     ports:
       - "3005:3005"
     environment:
@@ -193,6 +211,128 @@ services:
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
+    depends_on:
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - swiftlogistics-network
+
+  # CMS Service
+  cms-service:
+    build:
+      context: .
+      dockerfile: ./services/cms-service/Dockerfile
+    container_name: swiftlogistics-cms-service
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    ports:
+      - "3007:3007"
+    environment:
+      NODE_ENV: production
+      PORT: 3007
+      MONGODB_URI: mongodb+srv://admin:1234@cluster0.fay2twl.mongodb.net/swiftlogistics?retryWrites=true&w=majority&appName=Cluster0
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
+      JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
+      CLIENT_URL: http://localhost:8081
+      SERVICE_REGISTRY_URL: http://service-registry:3009
+      REGISTRY_URL: http://service-registry:3009
+      SERVICE_HOST: cms-service
+    depends_on:
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - swiftlogistics-network
+
+  # Integration Service (SAGA Orchestration)
+  integration-service:
+    build:
+      context: .
+      dockerfile: ./services/integration-service/Dockerfile
+    container_name: swiftlogistics-integration-service
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    ports:
+      - "3008:3008"
+    environment:
+      NODE_ENV: production
+      PORT: 3008
+      MONGODB_URI: mongodb+srv://admin:1234@cluster0.fay2twl.mongodb.net/swiftlogistics?retryWrites=true&w=majority&appName=Cluster0
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
+      JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
+      CLIENT_URL: http://localhost:8081
+      SERVICE_REGISTRY_URL: http://service-registry:3009
+      REGISTRY_URL: http://service-registry:3009
+      SERVICE_HOST: integration-service
+    depends_on:
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - swiftlogistics-network
+
+  # Service Registry
+  service-registry:
+    build:
+      context: .
+      dockerfile: ./services/service-registry/Dockerfile
+    container_name: swiftlogistics-service-registry
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    ports:
+      - "3009:3009"
+    environment:
+      NODE_ENV: production
+      PORT: 3009
+      MONGODB_URI: mongodb+srv://admin:1234@cluster0.fay2twl.mongodb.net/swiftlogistics?retryWrites=true&w=majority&appName=Cluster0
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
+      JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
+      CLIENT_URL: http://localhost:8081
+      SERVICE_HOST: service-registry
+    depends_on:
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - swiftlogistics-network
+
+  # WMS Service
+  wms-service:
+    build:
+      context: .
+      dockerfile: ./services/wms-service/Dockerfile
+    container_name: swiftlogistics-wms-service
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      MONGODB_URI: mongodb+srv://admin:1234@cluster0.fay2twl.mongodb.net/swiftlogistics?retryWrites=true&w=majority&appName=Cluster0
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
+      JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
+      CLIENT_URL: http://localhost:8081
+      SERVICE_REGISTRY_URL: http://service-registry:3009
+      REGISTRY_URL: http://service-registry:3009
+      SERVICE_HOST: wms-service
     depends_on:
       redis:
         condition: service_started

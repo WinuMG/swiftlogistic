@@ -13,9 +13,9 @@ db.createCollection('notifications');
 // Create indexes for better performance
 db.clients.createIndex({ "clientId": 1 }, { unique: true });
 db.clients.createIndex({ "email": 1 }, { unique: true });
-db.orders.createIndex({ "orderId": 1 }, { unique: true });
 db.orders.createIndex({ "clientId": 1 });
 db.orders.createIndex({ "status": 1 });
+db.orders.createIndex({ "driverId": 1 });
 db.packages.createIndex({ "packageId": 1 }, { unique: true });
 db.packages.createIndex({ "orderId": 1 });
 db.packages.createIndex({ "warehouseId": 1 });

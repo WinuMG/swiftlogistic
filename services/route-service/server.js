@@ -45,7 +45,16 @@ app.get('/health', (req, res) => {
 
 // Mock ROS (Route Optimization System) integration endpoints
 app.post('/api/ros/optimize', (req, res) => {
-  const { addresses, vehicleAvailability } = req.body;
+  // Accept both field names for backward compatibility
+  const addresses = req.body.addresses || req.body.deliveryAddresses || [];
+  const { vehicleAvailability } = req.body;
+  
+  if (!addresses || addresses.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'At least one address is required (use "addresses" or "deliveryAddresses")'
+    });
+  }
   
   // Simulate REST API call to ROS
   console.log(`🗺️ Calling ROS REST API to optimize route for ${addresses.length} addresses`);

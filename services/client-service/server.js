@@ -33,9 +33,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// --- Simple in-memory user store for demo ---
-const users = [];
+// --- MongoDB-backed auth (consolidated with gateway auth) ---
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const mongoose = databaseService.mongoose || require('mongoose');
+const { clientSchema, driverSchema } = require('./shared/models');
+
+const Client = mongoose.models.Client || mongoose.model("Client", new mongoose.Schema(clientSchema));
+const Driver = mongoose.models.Driver || mongoose.model("Driver", new mongoose.Schema(driverSchema));
 
 // DEF-001 FIX: Fail fast if JWT_SECRET is not configured — no insecure fallback
 if (!process.env.JWT_SECRET) {
@@ -44,32 +49,96 @@ if (!process.env.JWT_SECRET) {
 }
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// --- Public registration endpoint ---
-app.post('/api/clients/register', (req, res) => {
+// --- Public registration endpoint (MongoDB-backed) ---
+app.post('/api/clients/register', async (req, res) => {
   if (!req.body || typeof req.body !== 'object') {
     return res.status(400).json({ error: 'Invalid or missing JSON body.' });
   }
-  const { name, email, password } = req.body;
+  const { name, email, password, role, phone, address } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Name, email, and password are required.' });
   }
-  if (users.find(u => u.email === email)) {
-    return res.status(409).json({ error: 'Email already registered.' });
+
+  try {
+    // Check if user already exists
+    const existingClient = await Client.findOne({ email });
+    const existingDriver = await Driver.findOne({ email });
+    if (existingClient || existingDriver) {
+      return res.status(409).json({ error: 'Email already registered.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    if (role === 'driver') {
+      const driver = new Driver({
+        driverId: `DR${Date.now()}`,
+        name, email,
+        password: hashedPassword,
+        phone: phone || '',
+        vehicleNumber: '',
+        vehicleType: 'Motorcycle',
+        status: 'Active',
+        currentLocation: { type: 'Point', coordinates: [79.8612, 6.9271] },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      await driver.save();
+      const token = jwt.sign({ id: driver._id.toString(), email, role: 'driver', driverId: driver.driverId }, JWT_SECRET, { expiresIn: '24h' });
+      return res.status(201).json({ id: driver._id, name, email, role: 'driver', token });
+    } else {
+      const client = new Client({
+        clientId: `CL${Date.now()}`,
+        name, email,
+        password: hashedPassword,
+        phone: phone || '',
+        address: address || '',
+        status: 'Active',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      await client.save();
+      const token = jwt.sign({ id: client._id.toString(), email, role: 'client', clientId: client.clientId }, JWT_SECRET, { expiresIn: '24h' });
+      return res.status(201).json({ id: client._id, name, email, role: 'client', token });
+    }
+  } catch (err) {
+    console.error('Registration error:', err);
+    return res.status(500).json({ error: 'Registration failed', details: err.message });
   }
-  const user = { id: users.length + 1, name, email, password };
-  users.push(user);
-  res.status(201).json({ id: user.id, name: user.name, email: user.email });
 });
 
-// --- Public login endpoint ---
-app.post('/api/clients/login', (req, res) => {
+// --- Public login endpoint (MongoDB-backed) ---
+app.post('/api/clients/login', async (req, res) => {
   const { email, password } = req.body;
-  const user = users.find(u => u.email === email && u.password === password);
-  if (!user) {
-    return res.status(401).json({ error: 'Invalid email or password.' });
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
   }
-  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '1h' });
-  res.json({ token });
+
+  try {
+    let user = await Client.findOne({ email });
+    let userType = 'client';
+    if (!user) {
+      user = await Driver.findOne({ email });
+      userType = 'driver';
+    }
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    const isValid = await bcrypt.compare(password, user.password || '');
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    const token = jwt.sign({
+      id: user._id.toString(), email: user.email, role: userType,
+      clientId: user.clientId, driverId: user.driverId
+    }, JWT_SECRET, { expiresIn: '24h' });
+
+    res.json({ token, user: { id: user._id, name: user.name, email: user.email, role: userType } });
+  } catch (err) {
+    console.error('Login error:', err);
+    return res.status(500).json({ error: 'Login failed', details: err.message });
+  }
 });
 
 // Health check endpoint

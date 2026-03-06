@@ -1,10 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import './OrderList.css';
 
 function OrderList({ token }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [expandedProofs, setExpandedProofs] = useState({});
+
+  const toggleProof = useCallback((orderId) => {
+    setExpandedProofs(prev => ({ ...prev, [orderId]: !prev[orderId] }));
+  }, []);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -149,6 +154,47 @@ function OrderList({ token }) {
                   </div>
                 )}
               </div>
+
+              {/* Proof of Delivery / Failure Reason */}
+              {(order.status === 'delivered' || order.status === 'completed') && order.proofOfDelivery && (
+                <div className="proof-of-delivery proof-success">
+                  <button className="proof-toggle" onClick={() => toggleProof(order._id || order.id)}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span>Proof of Delivery</span>
+                    <svg className={`proof-chevron ${expandedProofs[order._id || order.id] ? 'open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                  {expandedProofs[order._id || order.id] && (
+                    <div className="proof-content">
+                      {order.proofOfDelivery.signature && (
+                        <div className="proof-item">
+                          <span className="proof-label">Signature</span>
+                          <img className="proof-signature" src={order.proofOfDelivery.signature} alt="Delivery signature" />
+                        </div>
+                      )}
+                      {order.proofOfDelivery.photo && (
+                        <div className="proof-item">
+                          <span className="proof-label">Photo</span>
+                          <img className="proof-photo" src={order.proofOfDelivery.photo} alt="Delivery photo" />
+                        </div>
+                      )}
+                      {order.proofOfDelivery.deliveredAt && (
+                        <div className="proof-item">
+                          <span className="proof-label">Delivered</span>
+                          <span className="proof-value">{formatDate(order.proofOfDelivery.deliveredAt)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {(order.status === 'failed' || order.status === 'cancelled') && order.reason && (
+                <div className="proof-of-delivery proof-failure">
+                  <div className="proof-failure-banner">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span>Reason: {order.reason}</span>
+                  </div>
+                </div>
+              )}
 
               <div className="order-card-footer">
                 {order.createdAt && (

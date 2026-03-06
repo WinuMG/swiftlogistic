@@ -164,26 +164,34 @@ function preRegisterServices() {
     { name: 'notification-service', port: 3005, protocol: 'HTTP', metadata: { role: 'Notifications' } },
     { name: 'cms-service',          port: 3007, protocol: 'SOAP', metadata: { role: 'CMS (SOAP/XML)' } },
     { name: 'integration-service',  port: 3008, protocol: 'HTTP', metadata: { role: 'ESB / SAGA Orchestrator' } },
-    { name: 'wms-service',          port: 4001, protocol: 'TCP+HTTP', metadata: { role: 'WMS (TCP/IP)', tcpPort: 4000 } }
+    { name: 'wms-service',          port: 4000, protocol: 'TCP+HTTP', metadata: { role: 'WMS (TCP/IP)', tcpPort: 4001 } }
   ];
 
+  // When running in Docker, each service is reachable by its service name.
+  // SERVICE_HOST env var on the registry itself won't help here — instead we
+  // use the service name directly as the Docker-resolvable hostname.
+  const isDocker = process.env.REGISTRY_URL
+    ? !process.env.REGISTRY_URL.includes('localhost')
+    : false;
+
   knownServices.forEach((svc) => {
-    const serviceId = `${svc.name}-localhost-${svc.port}`;
+    const host = isDocker ? svc.name : 'localhost';
+    const serviceId = `${svc.name}-${host}-${svc.port}`;
     services.set(serviceId, {
       serviceId,
       name: svc.name,
-      host: 'localhost',
+      host,
       port: svc.port,
       protocol: svc.protocol,
       metadata: svc.metadata,
       status: 'UNKNOWN',
       registeredAt: new Date().toISOString(),
       lastHeartbeat: new Date().toISOString(),
-      healthCheckUrl: `http://localhost:${svc.port}/health`
+      healthCheckUrl: `http://${host}:${svc.port}/health`
     });
   });
 
-  console.log(`📋 Pre-registered ${knownServices.length} known services`);
+  console.log(`📋 Pre-registered ${knownServices.length} known services (host mode: ${isDocker ? 'docker' : 'local'})`);
 }
 
 // ─── Error handling ───────────────────────────────────────────────

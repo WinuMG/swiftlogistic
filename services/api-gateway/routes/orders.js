@@ -39,6 +39,37 @@ router.post('/', async (req, res) => {
     const orderData = { ...req.body, clientId };
     const orderUrl = await discover('order-service');
     const response = await axios.post(`${orderUrl}/api/orders`, orderData, { timeout: 20000 });
+
+    // ═══ SOCKET FIX: Emit order-created event through gateway Socket.io ═══
+    const io = req.app.get('io');
+    if (io && response.data && response.data.order) {
+      const order = response.data.order;
+      io.emit('order-created', {
+        orderId: order._id, clientId: order.clientId,
+        status: order.status, productName: order.productName
+      });
+      io.emit('order-updated', {
+        orderId: order._id, status: order.status,
+        driverId: order.driverId, sagaId: order.sagaId
+      });
+      // Emit SAGA events for the UI
+      if (response.data.saga) {
+        const saga = response.data.saga;
+        if (saga.success) {
+          io.emit('saga-completed', { orderId: order._id, sagaId: saga.sagaId });
+        } else {
+          io.emit('saga-failed', { orderId: order._id, sagaId: saga.sagaId, error: saga.message });
+        }
+      }
+      // Notify assigned driver if auto-assigned
+      if (order.driverId) {
+        io.to(`driver-${order.driverId}`).emit('new-assignment', {
+          orderId: order._id, productName: order.productName,
+          deliveryAddress: order.deliveryAddress
+        });
+      }
+    }
+
     res.status(response.status).json(response.data);
   } catch (err) {
     invalidate('order-service');

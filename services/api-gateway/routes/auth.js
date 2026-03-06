@@ -54,16 +54,13 @@ router.post("/login", validateLogin, async (req, res) => {
     // Find user by email using Mongoose models
     let user = await Client.findOne({ email });
     let userType = "client";
-    console.error("DEBUG: Login - Client lookup result:", user);
 
     if (!user) {
       user = await Driver.findOne({ email });
       userType = "driver";
-      console.error("DEBUG: Login - Driver lookup result:", user);
     }
 
     if (!user) {
-      console.error("DEBUG: Login - No user found for email:", email);
       return res.status(401).json({
         error: "Invalid email or password",
         code: "INVALID_CREDENTIALS",
@@ -72,7 +69,6 @@ router.post("/login", validateLogin, async (req, res) => {
 
     // Check if user is active
     if (user.status !== "Active") {
-      console.error("DEBUG: Login - User not active. Status:", user.status);
       return res.status(401).json({
         error: "Account is not active",
         code: "ACCOUNT_INACTIVE",
@@ -82,9 +78,7 @@ router.post("/login", validateLogin, async (req, res) => {
 
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.password || "");
-    console.error("DEBUG: Login - Password comparison result:", isValidPassword);
     if (!isValidPassword) {
-      console.error("DEBUG: Login - Password mismatch for email:", email);
       return res.status(401).json({
         error: "Invalid email or password",
         code: "INVALID_CREDENTIALS",
@@ -96,8 +90,8 @@ router.post("/login", validateLogin, async (req, res) => {
       id: user._id.toString(),
       email: user.email,
       role: userType,
-      clientId: user.clientId || user.driverId,
-      driverId: user.driverId || user.clientId,
+      clientId: userType === 'client' ? (user.clientId || user._id.toString()) : null,
+      driverId: userType === 'driver' ? (user.driverId || user._id.toString()) : null,
     };
 
     const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
@@ -157,13 +151,9 @@ router.post("/login", validateLogin, async (req, res) => {
 // Register endpoint
 router.post("/register", validateRegister, async (req, res) => {
   try {
-    console.error("DEBUG: Registration handler started");
     // Check validation errors
     const errors = validationResult(req);
-    console.error("DEBUG: Validation errors:", errors.array());
     if (!errors.isEmpty()) {
-      console.error("DEBUG: Registration validation failed", errors.array());
-      
       // Format errors for better  display
       const formattedErrors = errors.array().map(err => {
         // Get custom message or generate one based on field
@@ -197,13 +187,10 @@ router.post("/register", validateRegister, async (req, res) => {
     }
 
   const { name, email, password, role, phone, clientId, driverId, address } = req.body;
-  console.error("DEBUG: Request body:", req.body);
-  console.error("DEBUG: Extracted address value:", address);
 
     // Check if user already exists using Mongoose models
     const existingUser = await Client.findOne({ email });
     if (existingUser) {
-      console.error("DEBUG: User with this email already exists (Client)");
       return res.status(409).json({
         error: "User with this email already exists",
         code: "USER_EXISTS",
@@ -212,7 +199,6 @@ router.post("/register", validateRegister, async (req, res) => {
 
     const existingDriver = await Driver.findOne({ email });
     if (existingDriver) {
-      console.error("DEBUG: User with this email already exists (Driver)");
       return res.status(409).json({
         error: "User with this email already exists",
         code: "USER_EXISTS",
@@ -238,7 +224,6 @@ router.post("/register", validateRegister, async (req, res) => {
           createdAt: new Date(),
           updatedAt: new Date(),
         };
-        console.error("DEBUG: Client creation object:", clientObj);
         userDoc = new Client(clientObj);
       await userDoc.save();
       userType = "client";

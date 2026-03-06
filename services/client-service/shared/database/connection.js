@@ -16,8 +16,10 @@ class DatabaseConnection {
 
       const options = {
         maxPoolSize: 10,
-        serverSelectionTimeoutMS: 5000,
+        serverSelectionTimeoutMS: 10000,
         socketTimeoutMS: 45000,
+        retryWrites: true,
+        w: 'majority',
       };
 
       this.mongoConnection = await mongoose.connect(uri, options);

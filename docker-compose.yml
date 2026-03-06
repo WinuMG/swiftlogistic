@@ -1,29 +1,6 @@
 version: '3.8'
 
 services:
-  # MongoDB Database
-  mongodb:
-    image: mongo:7.0
-    container_name: swiftlogistics-mongodb
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: swiftlogistics123
-      MONGO_INITDB_DATABASE: swiftlogistics
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-    networks:
-      - swiftlogistics-network
-
   # Redis Cache
   redis:
     image: redis:7.2-alpine
@@ -71,7 +48,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      MONGODB_URI: mongodb+srv://admin:1234@cluster0.fay2twl.mongodb.net/swiftlogistics?retryWrites=true&w=majority&appName=Cluster0
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
@@ -80,8 +57,6 @@ services:
       REGISTRY_URL: http://service-registry:3009
       SERVICE_HOST: api-gateway
     depends_on:
-      mongodb:
-        condition: service_healthy
       redis:
         condition: service_started
       rabbitmq:
@@ -101,7 +76,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      MONGODB_URI: mongodb+srv://admin:1234@cluster0.fay2twl.mongodb.net/swiftlogistics?retryWrites=true&w=majority&appName=Cluster0
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
@@ -110,8 +85,6 @@ services:
       REGISTRY_URL: http://service-registry:3009
       SERVICE_HOST: client-service
     depends_on:
-      mongodb:
-        condition: service_healthy
       redis:
         condition: service_started
       rabbitmq:
@@ -131,7 +104,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3002
-      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      MONGODB_URI: mongodb+srv://admin:1234@cluster0.fay2twl.mongodb.net/swiftlogistics?retryWrites=true&w=majority&appName=Cluster0
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
@@ -140,8 +113,6 @@ services:
       REGISTRY_URL: http://service-registry:3009
       SERVICE_HOST: order-service
     depends_on:
-      mongodb:
-        condition: service_healthy
       redis:
         condition: service_started
       rabbitmq:
@@ -161,7 +132,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3003
-      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      MONGODB_URI: mongodb+srv://admin:1234@cluster0.fay2twl.mongodb.net/swiftlogistics?retryWrites=true&w=majority&appName=Cluster0
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
@@ -170,8 +141,6 @@ services:
       REGISTRY_URL: http://service-registry:3009
       SERVICE_HOST: route-service
     depends_on:
-      mongodb:
-        condition: service_healthy
       redis:
         condition: service_started
       rabbitmq:
@@ -191,7 +160,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3004
-      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      MONGODB_URI: mongodb+srv://admin:1234@cluster0.fay2twl.mongodb.net/swiftlogistics?retryWrites=true&w=majority&appName=Cluster0
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
@@ -200,8 +169,6 @@ services:
       REGISTRY_URL: http://service-registry:3009
       SERVICE_HOST: warehouse-service
     depends_on:
-      mongodb:
-        condition: service_healthy
       redis:
         condition: service_started
       rabbitmq:
@@ -221,14 +188,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3005
-      MONGODB_URI: mongodb://admin:swiftlogistics123@mongodb:27017/swiftlogistics?authSource=admin
+      MONGODB_URI: mongodb+srv://admin:1234@cluster0.fay2twl.mongodb.net/swiftlogistics?retryWrites=true&w=majority&appName=Cluster0
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
     depends_on:
-      mongodb:
-        condition: service_healthy
       redis:
         condition: service_started
       rabbitmq:
@@ -253,7 +218,6 @@ services:
       - swiftlogistics-network
 
 volumes:
-  mongodb_data:
   redis_data:
   rabbitmq_data:
 

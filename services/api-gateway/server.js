@@ -1,4 +1,4 @@
-console.error("API Gateway starting...");
+console.log("API Gateway starting...");
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -6,6 +6,8 @@ const morgan = require("morgan");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
 const { createServer } = require("http");
+const https = require("https");
+const fs = require("fs");
 const { Server } = require("socket.io");
 const path = require("path");
 require("dotenv").config();
@@ -60,6 +62,10 @@ app.use(
   })
 );
 
+// NoSQL injection sanitization
+const mongoSanitize = require('express-mongo-sanitize');
+app.use(mongoSanitize());
+
 // CORS configuration
 app.use(
   cors({
@@ -102,46 +108,9 @@ app.get("/health", (req, res) => {
 });
 
 // Diagnostic logging for route handlers and middleware
-console.log(
-  "authRoutes:",
-  typeof authRoutes,
-  authRoutes.constructor && authRoutes.constructor.name
-);
-console.log(
-  "clientRoutes:",
-  typeof clientRoutes,
-  clientRoutes.constructor && clientRoutes.constructor.name
-);
-console.log(
-  "orderRoutes:",
-  typeof orderRoutes,
-  orderRoutes.constructor && orderRoutes.constructor.name
-);
-console.log(
-  "routeRoutes:",
-  typeof routeRoutes,
-  routeRoutes.constructor && routeRoutes.constructor.name
-);
-console.log(
-  "warehouseRoutes:",
-  typeof warehouseRoutes,
-  warehouseRoutes.constructor && warehouseRoutes.constructor.name
-);
-console.log(
-  "notificationRoutes:",
-  typeof notificationRoutes,
-  notificationRoutes.constructor && notificationRoutes.constructor.name
-);
-console.log(
-  "healthRoutes:",
-  typeof healthRoutes,
-  healthRoutes.constructor && healthRoutes.constructor.name
-);
-console.log(
-  "authMiddleware.verifyToken:",
-  typeof authMiddleware.verifyToken,
-  authMiddleware.verifyToken.constructor &&
-    authMiddleware.verifyToken.constructor.name
+console.log('Route handlers loaded: auth=%s, clients=%s, orders=%s, routes=%s, warehouse=%s, notifications=%s, health=%s',
+  typeof authRoutes, typeof clientRoutes, typeof orderRoutes, typeof routeRoutes,
+  typeof warehouseRoutes, typeof notificationRoutes, typeof healthRoutes
 );
 
 
@@ -194,7 +163,6 @@ app.use('/api/clients/login', async (req, res) => {
 });
 
 // API routes (protected)
-console.error("DEBUG: Mounting /api/auth route");
 app.use("/api/auth", authRoutes);
 app.use(
   "/api/clients",
@@ -306,6 +274,24 @@ app.get('/api/orders/driver/:driverId', authMiddleware.verifyToken.bind(authMidd
   }
 });
 
+// POST /api/orders/:id/assign — assign driver to order
+app.post('/api/orders/:id/assign', authMiddleware.verifyToken.bind(authMiddleware), async (req, res) => {
+  try {
+    const orderUrl = await discover('order-service');
+    const response = await integrationProxy({
+      method: 'POST',
+      url: `${orderUrl}/api/orders/${req.params.id}/assign`,
+      data: { driverId: req.body.driverId || (req.user ? req.user.driverId : undefined), ...req.body },
+      timeout: 10000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+    res.status(response.status).json(response.data);
+  } catch (err) {
+    const status = err.response ? err.response.status : 502;
+    res.status(status).json(err.response ? err.response.data : { error: 'Order service unavailable' });
+  }
+});
+
 // WebSocket connection handling
 io.on("connection", (socket) => {
   console.log(`🔌 Client connected: ${socket.id}`);
@@ -322,6 +308,14 @@ io.on("connection", (socket) => {
     console.log(`🚗 Driver ${driverId} joined room`);
   });
 
+  // Join generic user room (used by App.js)
+  socket.on("join-user-room", (userId) => {
+    if (userId) {
+      socket.join(`user-${userId}`);
+      console.log(`👤 User ${userId} joined user room`);
+    }
+  });
+
   socket.on("disconnect", () => {
     console.log(`🔌 Client disconnected: ${socket.id}`);
   });
@@ -329,6 +323,41 @@ io.on("connection", (socket) => {
 
 // Make io available to routes
 app.set("io", io);
+
+// ═══ SPOF FIX: Liveness probe for external health monitors ═══
+let lastSuccessfulRequest = Date.now();
+app.use((req, res, next) => {
+  lastSuccessfulRequest = Date.now();
+  next();
+});
+
+// Deep health check including downstream services (MUST be before 404 catch-all)
+app.get("/health/deep", async (req, res) => {
+  const axios_deep = require('axios');
+  const services = ['order-service', 'client-service', 'integration-service', 'notification-service', 'route-service', 'warehouse-service'];
+  const checks = {};
+  
+  for (const svc of services) {
+    try {
+      const url = await discover(svc);
+      const resp = await axios_deep.get(`${url}/health`, { timeout: 2000 });
+      checks[svc] = { status: 'UP', responseTime: resp.headers['x-response-time'] || 'N/A' };
+    } catch (err) {
+      checks[svc] = { status: 'DOWN', error: err.message };
+    }
+  }
+
+  const allUp = Object.values(checks).every(c => c.status === 'UP');
+  res.status(allUp ? 200 : 207).json({
+    status: allUp ? 'ALL_HEALTHY' : 'DEGRADED',
+    service: 'API Gateway',
+    lastSuccessfulRequest: new Date(lastSuccessfulRequest).toISOString(),
+    uptime: process.uptime(),
+    memoryUsage: process.memoryUsage(),
+    downstream: checks,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Error handling middleware (must be last)
 app.use(errorHandler);
@@ -447,7 +476,27 @@ async function startServer() {
       console.log(`✅ API Gateway server running on port ${PORT}`);
       console.log(`🌐 Health check: http://localhost:${PORT}/health`);
       console.log(`📡 WebSocket server ready`);
+
+      // Register with service registry and start heartbeat
+      registerSelf('api-gateway', PORT, 'HTTP', { role: 'gateway', version: '1.0.0' });
+      startHeartbeat('api-gateway', PORT);
     });
+
+    // Start HTTPS server if certificates are available
+    const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
+    const certPath = path.join(__dirname, '..', '..', 'certs', 'server.cert');
+    const keyPath = path.join(__dirname, '..', '..', 'certs', 'server.key');
+    if (fs.existsSync(certPath) && fs.existsSync(keyPath)) {
+      const httpsServer = https.createServer({
+        cert: fs.readFileSync(certPath),
+        key: fs.readFileSync(keyPath)
+      }, app);
+      httpsServer.listen(HTTPS_PORT, () => {
+        console.log(`🔐 HTTPS server running on port ${HTTPS_PORT}`);
+      });
+    } else {
+      console.warn(`⚠️ TLS certificates not found at ${certPath}, HTTPS disabled. Run scripts/generate-certs.sh to enable.`);
+    }
   } catch (error) {
     console.error("❌ Failed to start API Gateway:", error);
     process.exit(1);
@@ -462,8 +511,6 @@ process.on("uncaughtException", (err) => {
   if (err && err.stack) {
     console.error("Stack trace:", err.stack);
   }
-  // Don't crash — log and continue for non-fatal errors
-  // The gateway-watchdog.js will handle full crash recovery externally
 });
 
 process.on("unhandledRejection", (reason, promise) => {
@@ -471,42 +518,6 @@ process.on("unhandledRejection", (reason, promise) => {
   if (reason && reason.stack) {
     console.error("Stack trace:", reason.stack);
   }
-  // Don't crash — log and continue
-});
-
-// ═══ SPOF FIX: Liveness probe for external health monitors ═══
-let lastSuccessfulRequest = Date.now();
-app.use((req, res, next) => {
-  lastSuccessfulRequest = Date.now();
-  next();
-});
-
-// Deep health check including downstream services
-app.get("/health/deep", async (req, res) => {
-  const axios_deep = require('axios');
-  const services = ['order-service', 'client-service', 'integration-service', 'notification-service', 'route-service', 'warehouse-service'];
-  const checks = {};
-  
-  for (const svc of services) {
-    try {
-      const url = await discover(svc);
-      const resp = await axios_deep.get(`${url}/health`, { timeout: 2000 });
-      checks[svc] = { status: 'UP', responseTime: resp.headers['x-response-time'] || 'N/A' };
-    } catch (err) {
-      checks[svc] = { status: 'DOWN', error: err.message };
-    }
-  }
-
-  const allUp = Object.values(checks).every(c => c.status === 'UP');
-  res.status(allUp ? 200 : 207).json({
-    status: allUp ? 'ALL_HEALTHY' : 'DEGRADED',
-    service: 'API Gateway',
-    lastSuccessfulRequest: new Date(lastSuccessfulRequest).toISOString(),
-    uptime: process.uptime(),
-    memoryUsage: process.memoryUsage(),
-    downstream: checks,
-    timestamp: new Date().toISOString()
-  });
 });
 
 startServer();

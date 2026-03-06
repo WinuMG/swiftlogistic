@@ -76,6 +76,9 @@ services:
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
+      SERVICE_REGISTRY_URL: http://service-registry:3009
+      REGISTRY_URL: http://service-registry:3009
+      SERVICE_HOST: api-gateway
     depends_on:
       mongodb:
         condition: service_healthy
@@ -103,6 +106,9 @@ services:
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
+      SERVICE_REGISTRY_URL: http://service-registry:3009
+      REGISTRY_URL: http://service-registry:3009
+      SERVICE_HOST: client-service
     depends_on:
       mongodb:
         condition: service_healthy
@@ -130,6 +136,9 @@ services:
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
+      SERVICE_REGISTRY_URL: http://service-registry:3009
+      REGISTRY_URL: http://service-registry:3009
+      SERVICE_HOST: order-service
     depends_on:
       mongodb:
         condition: service_healthy
@@ -157,6 +166,9 @@ services:
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
+      SERVICE_REGISTRY_URL: http://service-registry:3009
+      REGISTRY_URL: http://service-registry:3009
+      SERVICE_HOST: route-service
     depends_on:
       mongodb:
         condition: service_healthy
@@ -184,6 +196,9 @@ services:
       RABBITMQ_URL: amqp://admin:swiftlogistics123@rabbitmq:5672
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
+      SERVICE_REGISTRY_URL: http://service-registry:3009
+      REGISTRY_URL: http://service-registry:3009
+      SERVICE_HOST: warehouse-service
     depends_on:
       mongodb:
         condition: service_healthy

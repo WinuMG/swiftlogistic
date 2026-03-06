@@ -85,6 +85,19 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ═══ ROUTE-ORDER FIX: /driver/:driverId MUST come BEFORE /:id ═══
+// GET /orders/driver/:driverId - get orders assigned to a driver
+router.get('/driver/:driverId', async (req, res) => {
+  try {
+    const orders = await Order.find({
+      driverId: req.params.driverId
+    }).sort({ priority: -1, createdAt: -1 });
+    res.json({ success: true, orders });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch driver orders', details: err.message });
+  }
+});
+
 // GET /orders/:id - get single order
 router.get('/:id', async (req, res) => {
   try {
@@ -189,6 +202,54 @@ router.post('/', validate(createOrderSchema), async (req, res) => {
       }
     }
 
+    // ═══ AUTO-ASSIGN DRIVER: Pick an available driver after SAGA ═══
+    try {
+      // Refresh order from DB (findByIdAndUpdate above doesn't update in-memory object)
+      const refreshedOrder = await Order.findById(order._id);
+      if (refreshedOrder) {
+        // Copy updated fields to local order for response
+        order.status = refreshedOrder.status;
+        order.sagaId = refreshedOrder.sagaId;
+        order.cmsOrderId = refreshedOrder.cmsOrderId;
+        order.packageId = refreshedOrder.packageId;
+        order.trackingNumber = refreshedOrder.trackingNumber;
+        order.routeId = refreshedOrder.routeId;
+      }
+
+      const mongoose = require('mongoose');
+      const { driverSchema } = require('../shared/models');
+      const Driver = mongoose.models.Driver || mongoose.model('Driver', new mongoose.Schema(driverSchema));
+      const availableDriver = await Driver.findOne({ status: 'Active' }).sort({ updatedAt: 1 });
+      if (availableDriver && (availableDriver.driverId || availableDriver._id)) {
+        const assignedDriverId = availableDriver.driverId || availableDriver._id.toString();
+        const newStatus = order.status === 'confirmed' ? 'processing' : order.status;
+        await Order.findByIdAndUpdate(order._id, {
+          driverId: assignedDriverId,
+          status: newStatus,
+          updatedAt: new Date()
+        });
+        order.driverId = assignedDriverId;
+        order.status = newStatus;
+        console.log(`🚗 Auto-assigned driver ${assignedDriverId} to order ${order._id}`);
+        // Emit assignment event
+        if (io) {
+          io.emit('order-assigned', { orderId: order._id, driverId: assignedDriverId, status: order.status });
+          io.to(`driver-${assignedDriverId}`).emit('new-assignment', {
+            orderId: order._id, productName: order.productName, deliveryAddress: order.deliveryAddress
+          });
+        }
+        // Notify assigned driver
+        pushNotification(assignedDriverId, 'order-assigned',
+          `New delivery assigned: "${order.productName}" to ${order.deliveryAddress}`,
+          { orderId: order._id }
+        );
+      } else {
+        console.log('⚠️ No available drivers for auto-assignment');
+      }
+    } catch (assignErr) {
+      console.warn('⚠️ Auto-assignment failed (non-fatal):', assignErr.message);
+    }
+
     // 5. Push notification to client via Notification Service (RabbitMQ fallback)
     pushNotification(clientId, 'order-created',
       `Your order "${productName}" has been placed and is being processed.`,
@@ -209,10 +270,13 @@ router.post('/', validate(createOrderSchema), async (req, res) => {
 // PUT /orders/:id/status - update order status (used by drivers)
 router.put('/:id/status', validate(updateOrderStatusSchema), async (req, res) => {
   try {
-    const { status, reason, driverId } = req.body;
+    const { status, reason, driverId, proofOfDelivery } = req.body;
+    const updateFields = { status, reason, driverId, updatedAt: new Date() };
+    if (proofOfDelivery) updateFields.proofOfDelivery = proofOfDelivery;
+    if (status === 'delivered') updateFields.deliveredAt = new Date();
     const order = await Order.findByIdAndUpdate(
       req.params.id,
-      { status, reason, driverId, updatedAt: new Date() },
+      updateFields,
       { new: true }
     );
     if (!order) return res.status(404).json({ error: 'Order not found' });
@@ -241,16 +305,46 @@ router.put('/:id/status', validate(updateOrderStatusSchema), async (req, res) =>
   }
 });
 
-// GET /orders/driver/:driverId - get orders assigned to a driver
-router.get('/driver/:driverId', async (req, res) => {
+// (Moved above /:id — see line ~90)
+
+// POST /orders/:id/assign - assign a driver to an order
+router.post('/:id/assign', async (req, res) => {
   try {
-    const orders = await Order.find({
-      driverId: req.params.driverId,
-      status: { $in: ['confirmed', 'processing', 'shipped', 'out_for_delivery'] }
-    }).sort({ priority: -1, createdAt: -1 });
-    res.json({ success: true, orders });
+    const { driverId } = req.body;
+    if (!driverId) return res.status(400).json({ error: 'driverId is required' });
+
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+
+    if (order.driverId && order.driverId !== '' && order.driverId !== driverId) {
+      return res.status(409).json({ error: 'Order already assigned to another driver', currentDriver: order.driverId });
+    }
+
+    order.driverId = driverId;
+    if (order.status === 'confirmed' || order.status === 'processing') {
+      order.status = 'processing';
+    }
+    order.updatedAt = new Date();
+    await order.save();
+
+    // Emit real-time update
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('order-assigned', { orderId: order._id, driverId, status: order.status });
+      io.to(`driver-${driverId}`).emit('new-assignment', {
+        orderId: order._id, productName: order.productName, deliveryAddress: order.deliveryAddress
+      });
+    }
+
+    // Push notification to driver
+    pushNotification(driverId, 'order-assigned',
+      `New delivery assigned: "${order.productName}" to ${order.deliveryAddress}`,
+      { orderId: order._id }
+    );
+
+    res.json({ success: true, order });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch driver orders', details: err.message });
+    res.status(500).json({ error: 'Failed to assign order', details: err.message });
   }
 });
 

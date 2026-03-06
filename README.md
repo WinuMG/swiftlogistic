@@ -33,19 +33,24 @@ The solution implements a microservices-based middleware architecture with the f
 ```
 swiftlogistics/
 ├── services/                    # Microservices
-│   ├── api-gateway/           # API Gateway service
-│   ├── client-service/        # Client management service
-│   ├── order-service/         # Order management service
-│   ├── route-service/         # Route optimization service
-│   ├── warehouse-service/     # Warehouse management service
-│   └── notification-service/  # Notification service
-├── client-portal/             # React-based client portal
+│   ├── api-gateway/           # API Gateway (centralized entry point, JWT auth, rate limiting)
+│   ├── client-service/        # Client management service (MongoDB-backed auth)
+│   ├── order-service/         # Order management service (SAGA trigger, workflow engine)
+│   ├── route-service/         # Route Optimization System (ROS) - REST/JSON mock
+│   ├── warehouse-service/     # Warehouse management service (REST bridge)
+│   ├── notification-service/  # Real-time notification service (Socket.io + RabbitMQ)
+│   ├── cms-service/           # Client Management System (CMS) - SOAP/XML mock
+│   ├── integration-service/   # ESB / SAGA Orchestrator (CMS→WMS→ROS)
+│   ├── service-registry/      # Service discovery registry
+│   └── wms-service/           # Warehouse Management System (WMS) - TCP/IP mock
+├── client-portal/             # React-based client portal & driver dashboard
 ├── shared/                    # Shared utilities and models
-│   ├── database/             # Database connection utilities
-│   ├── messaging/            # RabbitMQ utilities
-│   └── models/               # Shared data models
-├── scripts/                   # Database initialization scripts
-├── docker-compose.yml         # Docker orchestration
+│   ├── database/             # MongoDB + Redis connection utilities
+│   ├── messaging/            # RabbitMQ utilities (DLQ, retry, exchanges)
+│   ├── models/               # Shared Mongoose data models
+│   └── utils/                # Circuit breaker, service discovery, Joi schemas
+├── scripts/                   # Database init & TLS cert generation
+├── docker-compose.yml         # Docker orchestration (11 services + 3 infra)
 └── README.md                 # This file
 ```
 
@@ -78,7 +83,7 @@ npm run dev
 
 ### 4. Access the Services
 - **API Gateway**: http://localhost:3000
-- **Client Portal**: http://localhost:8080
+- **Client Portal**: http://localhost:8081
 - **RabbitMQ Management**: http://localhost:15672 (admin/swiftlogistics123)
 - **MongoDB**: localhost:27017
 - **Redis**: localhost:6379
@@ -291,9 +296,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 👥 Team
 
-- **UCSC 2025, Middleware Architectures (IS3108/SCS3203)**
-- **Assignment 4 - Middleware Architecture for "SwiftLogistics"**
-- **Deadline: 06 September 2025**
+- **UCSC 2026, Middleware Architecture (SCS2314)**
+- **Assignment 4 – Middleware Architecture for "SwiftLogistics"**
+- **Deadline: 28 February 2026**
 
 ## 📞 Support
 

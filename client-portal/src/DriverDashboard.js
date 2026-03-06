@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./DriverDashboard.css";
 
 function DriverDashboard({ token, user }) {
@@ -10,10 +10,17 @@ function DriverDashboard({ token, user }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [failReason, setFailReason] = useState("");
   const [notification, setNotification] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
+  const canvasRef = useRef(null);
+  const isDrawingRef = useRef(false);
+  const lastPosRef = useRef({ x: 0, y: 0 });
 
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await fetch(`/api/orders`, {
+      // Fetch driver-specific orders using driverId from user profile
+      const driverId = user?.driverId || user?.userId || user?.id || '';
+      const url = driverId ? `/api/orders/driver/${driverId}` : `/api/orders`;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -23,7 +30,7 @@ function DriverDashboard({ token, user }) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, user]);
 
   useEffect(() => {
     fetchOrders();
@@ -68,12 +75,83 @@ function DriverDashboard({ token, user }) {
   const handleDeliver = (order) => {
     setSelectedOrder(order);
     setShowSignatureModal(true);
+    setPhotoFile(null);
+  };
+
+  // Canvas signature helpers
+  const initCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = "#1a1a2e";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+  }, []);
+
+  useEffect(() => {
+    if (showSignatureModal) {
+      setTimeout(initCanvas, 100);
+    }
+  }, [showSignatureModal, initCanvas]);
+
+  const getPos = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+    }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const startDraw = (e) => {
+    isDrawingRef.current = true;
+    lastPosRef.current = getPos(e, canvasRef.current);
+  };
+
+  const draw = (e) => {
+    if (!isDrawingRef.current) return;
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const pos = getPos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    lastPosRef.current = pos;
+  };
+
+  const stopDraw = () => { isDrawingRef.current = false; };
+
+  const clearSignature = () => { initCanvas(); };
+
+  const getSignatureData = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    return canvas.toDataURL("image/png");
+  };
+
+  const handlePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setPhotoFile(reader.result);
+      reader.readAsDataURL(file);
+    }
   };
 
   const confirmDelivery = () => {
     if (selectedOrder) {
+      const signatureData = getSignatureData();
+      const proofOfDelivery = photoFile
+        ? `PHOTO:${photoFile.substring(0, 100)}...`
+        : signatureData
+          ? `SIG:${signatureData.substring(0, 100)}...`
+          : `SIG-${Date.now()}`;
       updateOrderStatus(selectedOrder._id, "delivered", {
-        proofOfDelivery: `SIG-${Date.now()}`,
+        proofOfDelivery,
       });
     }
   };
@@ -303,11 +381,27 @@ function DriverDashboard({ token, user }) {
               <strong>{selectedOrder.deliveryAddress}</strong>?
             </p>
             <div className="signature-area">
-              <div className="signature-placeholder">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="40" height="40">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                </svg>
-                <p>Digital Signature Captured</p>
+              <p style={{fontSize:'0.85rem',color:'#666',marginBottom:'8px'}}>Draw your signature below:</p>
+              <canvas
+                ref={canvasRef}
+                width={320}
+                height={150}
+                style={{border:'1px solid #ccc',borderRadius:'8px',cursor:'crosshair',touchAction:'none',background:'#fff'}}
+                onMouseDown={startDraw}
+                onMouseMove={draw}
+                onMouseUp={stopDraw}
+                onMouseLeave={stopDraw}
+                onTouchStart={startDraw}
+                onTouchMove={draw}
+                onTouchEnd={stopDraw}
+              />
+              <button type="button" className="action-btn" style={{marginTop:'6px',fontSize:'0.8rem',padding:'4px 12px'}} onClick={clearSignature}>
+                Clear Signature
+              </button>
+              <div style={{marginTop:'12px'}}>
+                <label style={{fontSize:'0.85rem',color:'#666'}}>Or capture a photo as proof:</label>
+                <input type="file" accept="image/*" capture="environment" onChange={handlePhotoChange} style={{marginTop:'4px',display:'block'}} />
+                {photoFile && <p style={{color:'green',fontSize:'0.8rem',marginTop:'4px'}}>✅ Photo captured</p>}
               </div>
             </div>
             <div className="modal-actions">

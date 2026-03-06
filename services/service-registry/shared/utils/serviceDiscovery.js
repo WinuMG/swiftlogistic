@@ -11,18 +11,24 @@ const axios = require('axios');
 const REGISTRY_URL = process.env.REGISTRY_URL || 'http://localhost:3009';
 const CACHE_TTL    = 30000; // 30 seconds
 
+// Detect Docker: SERVICE_HOST is set on all services in docker-compose.yml
+const IS_DOCKER = !!(process.env.SERVICE_HOST && process.env.SERVICE_HOST !== 'localhost');
+
 // ── Default service map (fallback) ──────────────────────────────
+// In Docker, services are reachable by their compose service name.
+// Locally, everything runs on localhost.
+const _host = (name) => IS_DOCKER ? name : 'localhost';
 const DEFAULTS = {
-  'api-gateway':          'http://localhost:3000',
-  'client-service':       'http://localhost:3001',
-  'order-service':        'http://localhost:3002',
-  'route-service':        'http://localhost:3003',
-  'warehouse-service':    'http://localhost:3004',
-  'notification-service': 'http://localhost:3005',
-  'cms-service':          'http://localhost:3007',
-  'integration-service':  'http://localhost:3008',
-  'service-registry':     'http://localhost:3009',
-  'wms-service':          'http://localhost:4001',   // HTTP port
+  'api-gateway':          `http://${_host('api-gateway')}:3000`,
+  'client-service':       `http://${_host('client-service')}:3001`,
+  'order-service':        `http://${_host('order-service')}:3002`,
+  'route-service':        `http://${_host('route-service')}:3003`,
+  'warehouse-service':    `http://${_host('warehouse-service')}:3004`,
+  'notification-service': `http://${_host('notification-service')}:3005`,
+  'cms-service':          `http://${_host('cms-service')}:3007`,
+  'integration-service':  `http://${_host('integration-service')}:3008`,
+  'service-registry':     `http://${_host('service-registry')}:3009`,
+  'wms-service':          `http://${_host('wms-service')}:4000`,
 };
 
 // ── In-memory cache ─────────────────────────────────────────────
@@ -66,9 +72,12 @@ async function discover(serviceName) {
  * Register this service with the registry.
  */
 async function registerSelf(name, port, protocol = 'HTTP', metadata = {}) {
+  // Inside Docker, SERVICE_HOST is set to the container's resolvable hostname
+  // (e.g. 'order-service'). Falls back to 'localhost' for local development.
+  const host = process.env.SERVICE_HOST || 'localhost';
   try {
     await axios.post(`${REGISTRY_URL}/api/registry/register`, {
-      name, host: 'localhost', port, protocol, metadata
+      name, host, port, protocol, metadata
     }, { timeout: 3000 });
     console.log(`✅ [ServiceDiscovery] Registered ${name} with registry`);
   } catch (err) {
@@ -80,9 +89,10 @@ async function registerSelf(name, port, protocol = 'HTTP', metadata = {}) {
  * Send heartbeat to the registry.
  */
 async function heartbeat(name, port) {
+  const host = process.env.SERVICE_HOST || 'localhost';
   try {
     await axios.post(`${REGISTRY_URL}/api/registry/heartbeat`, {
-      name, port, serviceId: `${name}-localhost-${port}`
+      name, port, serviceId: `${name}-${host}-${port}`
     }, { timeout: 2000 });
   } catch (_) { /* silent */ }
 }

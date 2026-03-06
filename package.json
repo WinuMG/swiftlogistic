@@ -28,7 +28,7 @@
     "test:route-service": "cd services/route-service && npm test",
     "test:warehouse-service": "cd services/warehouse-service && npm test",
     "test:notification-service": "cd services/notification-service && npm test",
-    "install:all": "npm install && cd services/api-gateway && npm install && cd ../client-service && npm install && cd ../order-service && npm install && cd ../route-service && npm install && cd ../warehouse-service && npm install && cd ../notification-service && npm install && cd ../../client-portal && npm install"
+    "install:all": "npm install && cd services/api-gateway && npm install && cd ../client-service && npm install && cd ../order-service && npm install && cd ../route-service && npm install && cd ../warehouse-service && npm install && cd ../notification-service && npm install && cd ../../client-portal && npm install --legacy-peer-deps"
   },
   "keywords": [
     "middleware",

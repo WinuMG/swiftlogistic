@@ -1,0 +1,104 @@
+/**
+ * Service Discovery Client
+ * ─────────────────────────
+ * Resolves service URLs via the Service Registry (port 3009).
+ * Caches results for 30s to avoid hammering the registry.
+ * Falls back to hardcoded defaults when the registry is unreachable.
+ */
+
+const axios = require('axios');
+
+const REGISTRY_URL = process.env.REGISTRY_URL || 'http://localhost:3009';
+const CACHE_TTL    = 30000; // 30 seconds
+
+// ── Default service map (fallback) ──────────────────────────────
+const DEFAULTS = {
+  'api-gateway':          'http://localhost:3000',
+  'client-service':       'http://localhost:3001',
+  'order-service':        'http://localhost:3002',
+  'route-service':        'http://localhost:3003',
+  'warehouse-service':    'http://localhost:3004',
+  'notification-service': 'http://localhost:3005',
+  'cms-service':          'http://localhost:3007',
+  'integration-service':  'http://localhost:3008',
+  'service-registry':     'http://localhost:3009',
+  'wms-service':          'http://localhost:4001',   // HTTP port
+};
+
+// ── In-memory cache ─────────────────────────────────────────────
+const cache = new Map();
+
+/**
+ * Discover a service URL by name.
+ * @param {string} serviceName  e.g. 'order-service'
+ * @returns {Promise<string>}   e.g. 'http://localhost:3002'
+ */
+async function discover(serviceName) {
+  // 1. Check cache
+  const cached = cache.get(serviceName);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return cached.url;
+  }
+
+  // 2. Query registry
+  try {
+    const res = await axios.get(
+      `${REGISTRY_URL}/api/registry/discover/${serviceName}`,
+      { timeout: 2000 }
+    );
+    if (res.data && res.data.success && res.data.data) {
+      const svc = res.data.data;
+      const url = `http://${svc.host}:${svc.port}`;
+      cache.set(serviceName, { url, ts: Date.now() });
+      return url;
+    }
+  } catch (_ignored) {
+    // Registry unreachable — fall through to default
+  }
+
+  // 3. Fallback
+  const fallback = DEFAULTS[serviceName] || `http://localhost:3000`;
+  cache.set(serviceName, { url: fallback, ts: Date.now() });
+  return fallback;
+}
+
+/**
+ * Register this service with the registry.
+ */
+async function registerSelf(name, port, protocol = 'HTTP', metadata = {}) {
+  try {
+    await axios.post(`${REGISTRY_URL}/api/registry/register`, {
+      name, host: 'localhost', port, protocol, metadata
+    }, { timeout: 3000 });
+    console.log(`✅ [ServiceDiscovery] Registered ${name} with registry`);
+  } catch (err) {
+    console.warn(`⚠️ [ServiceDiscovery] Registry unavailable (${err.message})`);
+  }
+}
+
+/**
+ * Send heartbeat to the registry.
+ */
+async function heartbeat(name, port) {
+  try {
+    await axios.post(`${REGISTRY_URL}/api/registry/heartbeat`, {
+      name, port, serviceId: `${name}-localhost-${port}`
+    }, { timeout: 2000 });
+  } catch (_) { /* silent */ }
+}
+
+/**
+ * Convenience: start periodic heartbeat every 20s.
+ */
+function startHeartbeat(name, port) {
+  setInterval(() => heartbeat(name, port), 20000);
+}
+
+/**
+ * Invalidate cached entry (useful after a failure to force re-discovery).
+ */
+function invalidate(serviceName) {
+  cache.delete(serviceName);
+}
+
+module.exports = { discover, registerSelf, heartbeat, startHeartbeat, invalidate, DEFAULTS };

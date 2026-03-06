@@ -42,6 +42,9 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy (needed when behind nginx/docker reverse proxy)
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(
   helmet({
@@ -383,16 +386,24 @@ async function startServer() {
   try {
     console.log("🚀 Starting SwiftLogistics API Gateway...");
 
-    // Connect to databases
-    try {
-      if (process.env.MONGODB_URI) {
-        await databaseService.connectMongoDB(process.env.MONGODB_URI);
-        console.log("✅ MongoDB connected");
-      } else {
-        console.warn("⚠️ MONGODB_URI not set, skipping MongoDB connection");
+    // Connect to databases with retry
+    if (process.env.MONGODB_URI) {
+      for (let attempt = 1; attempt <= 10; attempt++) {
+        try {
+          await databaseService.connectMongoDB(process.env.MONGODB_URI);
+          console.log("✅ MongoDB connected");
+          break;
+        } catch (err) {
+          console.warn(`⚠️ MongoDB connection attempt ${attempt}/10 failed: ${err.message}`);
+          if (attempt < 10) {
+            await new Promise(r => setTimeout(r, 3000));
+          } else {
+            console.error("❌ MongoDB connection failed after 10 attempts");
+          }
+        }
       }
-    } catch (err) {
-      console.warn("⚠️ MongoDB connection failed, continuing without it:", err.message);
+    } else {
+      console.warn("⚠️ MONGODB_URI not set, skipping MongoDB connection");
     }
 
     try {

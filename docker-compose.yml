@@ -15,6 +15,12 @@ services:
     volumes:
       - mongodb_data:/data/db
       - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - swiftlogistics-network
 
@@ -44,6 +50,12 @@ services:
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     networks:
       - swiftlogistics-network
 
@@ -65,9 +77,12 @@ services:
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
     depends_on:
-      - mongodb
-      - redis
-      - rabbitmq
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - swiftlogistics-network
 
@@ -89,9 +104,12 @@ services:
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
     depends_on:
-      - mongodb
-      - redis
-      - rabbitmq
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - swiftlogistics-network
 
@@ -113,9 +131,12 @@ services:
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
     depends_on:
-      - mongodb
-      - redis
-      - rabbitmq
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - swiftlogistics-network
 
@@ -137,9 +158,12 @@ services:
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
     depends_on:
-      - mongodb
-      - redis
-      - rabbitmq
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - swiftlogistics-network
 
@@ -161,9 +185,12 @@ services:
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
     depends_on:
-      - mongodb
-      - redis
-      - rabbitmq
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - swiftlogistics-network
 
@@ -185,9 +212,12 @@ services:
       JWT_SECRET: swiftlogistics-super-secret-jwt-key-2025
       CLIENT_URL: http://localhost:8081
     depends_on:
-      - mongodb
-      - redis
-      - rabbitmq
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks:
       - swiftlogistics-network
 

@@ -19,39 +19,48 @@ class RabbitMQService {
   }
 
   // ───────────────────────── Connection ──────────────────────────
-  async connect(url) {
-    try {
-      if (this.connection) return this.connection;
+  async connect(url, retries = 10, delayMs = 3000) {
+    if (this.connection) return this.connection;
 
-      this.connection = await amqp.connect(url);
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        this.connection = await amqp.connect(url);
 
-      this.connection.on('error', (err) => {
-        console.error('❌ RabbitMQ connection error:', err);
-        this.connection = null;
-        this.channel = null;
-      });
+        this.connection.on('error', (err) => {
+          console.error('❌ RabbitMQ connection error:', err);
+          this.connection = null;
+          this.channel = null;
+          setTimeout(() => this.connect(url).catch(() => {}), delayMs);
+        });
 
-      this.connection.on('close', () => {
-        console.log('⚠️ RabbitMQ connection closed');
-        this.connection = null;
-        this.channel = null;
-      });
+        this.connection.on('close', () => {
+          console.log('⚠️ RabbitMQ connection closed, reconnecting...');
+          this.connection = null;
+          this.channel = null;
+          setTimeout(() => this.connect(url).catch(() => {}), delayMs);
+        });
 
-      this.channel = await this.connection.createChannel();
+        this.channel = await this.connection.createChannel();
 
-      this.channel.on('error', (err) => {
-        console.error('❌ RabbitMQ channel error:', err);
-      });
+        this.channel.on('error', (err) => {
+          console.error('❌ RabbitMQ channel error:', err);
+        });
 
-      this.channel.on('return', (msg) => {
-        console.log('⚠️ RabbitMQ message returned:', msg);
-      });
+        this.channel.on('return', (msg) => {
+          console.log('⚠️ RabbitMQ message returned:', msg);
+        });
 
-      console.log('✅ RabbitMQ connected successfully');
-      return this.connection;
-    } catch (error) {
-      console.error('❌ Failed to connect to RabbitMQ:', error);
-      throw error;
+        console.log('✅ RabbitMQ connected successfully');
+        return this.connection;
+      } catch (error) {
+        console.error(`❌ RabbitMQ connect attempt ${attempt}/${retries} failed:`, error.message);
+        if (attempt < retries) {
+          console.log(`⏳ Retrying in ${delayMs / 1000}s...`);
+          await new Promise(res => setTimeout(res, delayMs));
+        } else {
+          throw error;
+        }
+      }
     }
   }
 
